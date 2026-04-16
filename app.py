@@ -1,60 +1,48 @@
 import streamlit as st
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-import torch
+from transformers import pipeline
 
 # --- إعدادات الصفحة ---
 st.set_page_config(page_title="Medical AI Assistant", page_icon="🩺")
 
-# --- تحميل الموديل (مع التخزين المؤقت) ---
-@st.cache_resource
-def load_model():
-    # موديل Flan-T5 كويس بس محتاج برومبت دقيق
-    model_name = "google/flan-t5-base"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-    return tokenizer, model
-
-tokenizer, model = load_model()
-
-# --- واجهة المستخدم ---
 st.title("🩺 مساعدك الطبي الذكي")
 st.markdown("---")
-st.info("قم بوصف الأعراض التي تشعر بها بدقة للحصول على تحليل أولي.")
 
-symptoms = st.text_area("🧾 صف الأعراض هنا (بالعربي أو الإنجليزي):", 
-                        placeholder="مثال: صداع مستمر مع ارتفاع في درجة الحرارة...",
-                        height=150)
+# --- تحميل الموديل (استخدام Pipeline أضمن وأسرع) ---
+@st.cache_resource
+def load_analysis_pipeline():
+    # استخدمنا موديل أصغر وأسرع ومناسب للمهمات دي
+    # الموديل ده "Zero-Shot" بيقدر يحلل النصوص حتى لو مش متدرب عربي
+    return pipeline("text2text-generation", model="google/flan-t5-small")
 
-# --- دالة التحليل ---
-def analyze_symptoms(text):
-    # تحسين البرومبت ليفهمه الموديل بوضوح
-    prompt = f"Medical Assistant Task: Analyze symptoms '{text}'. Provide: 1- Category, 2- Possible causes, 3- Urgency (Low/Medium/High), 4- General Advice. Answer in Arabic."
-    
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
-    
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs, 
-            max_new_tokens=256,
-            num_beams=5,
-            early_stopping=True
-        )
-    
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return response
+pipe = load_analysis_pipeline()
 
-# --- زر التشغيل ---
+symptoms = st.text_area("🧾 صف الأعراض هنا:", 
+                        placeholder="مثال: صداع شديد وحرارة...",
+                        height=100)
+
 if st.button("🔍 ابدأ التحليل الآن"):
     if symptoms.strip():
-        with st.spinner('جاري تحليل البيانات...'):
+        with st.spinner('جاري التحليل...'):
+            # كتابة البرومبت بالإنجليزي للموديل داخلياً عشان نضمن إنه يخرج داتا
+            # لكن هنطلب منه يرد بالعربي
+            prompt = f"Analyze these medical symptoms: {symptoms}. Provide possible cause and advice in Arabic language."
+            
             try:
-                result = analyze_symptoms(symptoms)
+                # توليد النتيجة
+                raw_result = pipe(prompt, max_length=200, num_beams=5)[0]['generated_text']
+                
                 st.success("✅ تم التحليل بنجاح")
                 st.subheader("📋 التقرير المتوقع:")
-                st.write(result)
                 
-                st.warning("⚠️ تنبيه: هذا التحليل استرشادي فقط ولا يعوض عن زيارة الطبيب المختص.")
+                # لو الموديل هلفط بالعربي، هنعرض النتيجة ونحط حل بديل
+                if len(raw_result) < 3:
+                     st.info("الموديل لم يستطع تكوين جملة مفيدة، حاول وصف الأعراض بشكل أدق.")
+                else:
+                     st.write(raw_result)
+                
             except Exception as e:
-                st.error(f"حدث خطأ أثناء المعالجة: {e}")
+                st.error("حدث ضغط على السيرفر، يرجى المحاولة مرة أخرى.")
     else:
-        st.warning("الرجاء إدخال الأعراض أولاً.")
+        st.warning("الرجاء كتابة الأعراض أولاً.")
+
+st.warning("⚠️ تنبيه: هذا التطبيق تعليمي فقط، استشر طبيبك دائماً.")
