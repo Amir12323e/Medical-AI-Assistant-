@@ -53,13 +53,16 @@ def analyze(symptoms):
     return result
 
 # ---------------- RUN ----------------
-if st.button("🔍 تحليل الأعراض"):
+if result and result.strip():
 
-    if not symptoms.strip():
-        st.warning("من فضلك اكتب الأعراض")
-    else:
-        result = analyze(symptoms)
+    tts = gTTS(text=result, lang="ar")
+    audio_file = f"voice_{uuid.uuid4().hex}.mp3"
+    tts.save(audio_file)
 
+    st.audio(audio_file)
+
+else:
+    st.warning("لا يوجد نص لتحويله إلى صوت")
         st.subheader("📋 النتيجة")
         st.write(result)
 
