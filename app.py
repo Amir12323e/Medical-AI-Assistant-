@@ -1,54 +1,88 @@
 import streamlit as st
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-import torch
 
 # --- إعدادات الصفحة ---
-st.set_page_config(page_title="Medical AI", page_icon="🩺")
+st.set_page_config(page_title="Medical AI Assistant", page_icon="🩺")
+
+# تنسيق CSS بسيط لتحسين شكل الكلام
+st.markdown("""
+    <style>
+    .report-box {
+        background-color: #f0f2f6;
+        padding: 20px;
+        border-radius: 10px;
+        border-right: 5px solid #ff4b4b;
+        color: #31333F;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 st.title("🩺 مساعدك الطبي الذكي")
 st.markdown("---")
 
-# --- تحميل الموديل والـ Tokenizer بشكل منفصل أضمن ---
-@st.cache_resource
-def load_model_components():
-    # موديل LaMini ده صغير جداً وسريع جداً وأذكى من T5 العادي في الردود
-    model_id = "MBZUAI/LaMini-Flan-T5-77M" 
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_id)
-    return tokenizer, model
-
-try:
-    tokenizer, model = load_model_components()
-except Exception as e:
-    st.error("خطأ في تحميل الملفات الأساسية. جرب عمل Refresh.")
-
-symptoms = st.text_area("🧾 صف الأعراض هنا:", 
-                        placeholder="مثال: عندي كحة جافة وارتفاع في الحرارة...",
+symptoms = st.text_area("🧾 صف الأعراض هنا (مثال: صداع، كحة، ألم بطن):", 
+                        placeholder="اكتب أعراضك هنا...",
                         height=100)
 
+# --- محرك التحليل (Logic Engine) ---
+def analyze_symptoms_fast(text):
+    text = text.lower()
+    analysis = {
+        "الحالة": "غير محددة بدقة، يرجى استشارة طبيب",
+        "الأسباب المحتملة": "تحتاج لفحص سريري",
+        "الخطورة": "متوسطة - يرجى المتابعة",
+        "النصيحة": "شرب السوائل والراحة حتى زيارة الطبيب"
+    }
+
+    # تحليل بسيط بناءً على الكلمات المفتاحية
+    if "صداع" in text or "رأس" in text:
+        analysis.update({
+            "الحالة": "أعراض عصبية / إجهاد",
+            "الأسباب المحتملة": "إجهاد، قلة نوم، أو ضغط دم",
+            "الخطورة": "خفيفة إلى متوسطة",
+            "النصيحة": "الراحة في مكان مظلم وقياس ضغط الدم"
+        })
+    elif "كحة" in text or "سعال" in text or "صدر" in text:
+        analysis.update({
+            "الحالة": "أعراض تنفسية",
+            "الأسباب المحتملة": "برد، حساسية، أو التهاب شعبي",
+            "الخطورة": "متوسطة",
+            "النصيحة": "شرب سوائل دافئة وعمل جلسة بخار"
+        })
+    elif "بطن" in text or "مغص" in text or "إسهال" in text:
+        analysis.update({
+            "الحالة": "أعراض هضمية",
+            "الأسباب المحتملة": "نزلة معوية أو عسر هضم",
+            "الخطورة": "متوسطة",
+            "النصيحة": "تجنب الأكل الدسم والتركيز على المسلوق"
+        })
+    elif "حرارة" in text or "سخونية" in text:
+        analysis.update({
+            "الأسباب المحتملة": "عدوى بكتيرية أو فيروسية",
+            "الخطورة": "تستدعي المتابعة",
+            "النصيحة": "استخدام كمادات مياه فاتر وعمل فحص صورة دم"
+        })
+
+    return analysis
+
+# --- زر التشغيل ---
 if st.button("🔍 ابدأ التحليل الآن"):
     if symptoms.strip():
-        with st.spinner('جاري تحليل الأعراض طبيباً...'):
-            # البرومبت هنا هو السر: بنجبره يحلل ويطلع خطوات
-            input_text = f"As a medical assistant, analyze these symptoms: {symptoms}. Categorize them and give advice in Arabic."
+        with st.spinner('جاري معالجة البيانات...'):
+            result = analyze_symptoms_fast(symptoms)
             
-            inputs = tokenizer(input_text, return_tensors="pt")
+            st.success("✅ تم استخراج التقرير")
             
-            with torch.no_grad():
-                outputs = model.generate(
-                    **inputs, 
-                    max_new_tokens=256, 
-                    do_sample=True, 
-                    temperature=0.7,
-                    top_p=0.9
-                )
+            # عرض النتيجة بشكل شيك
+            st.markdown(f"""
+            <div class="report-box">
+                <h3>📋 التقرير المتوقع:</h3>
+                <p><b>• نوع الحالة:</b> {result['الحالة']}</p>
+                <p><b>• الأسباب المحتملة:</b> {result['الأسباب المحتملة']}</p>
+                <p><b>• مستوى الخطورة:</b> {result['الخطورة']}</p>
+                <p><b>• النصيحة:</b> {result['النصيحة']}</p>
+            </div>
+            """, unsafe_allow_html=True)
             
-            result = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            st.success("✅ تم التحليل")
-            st.subheader("📋 النتيجة:")
-            st.info(result) 
-            
-            st.warning("⚠️ هذا التحليل استرشادي فقط، توجه لأقرب طبيب فوراً إذا كانت الحالة طارئة.")
+            st.warning("⚠️ تنبيه: هذا التحليل برمجي فقط بناءً على كلماتك، ولا يغني أبداً عن زيارة الطبيب.")
     else:
-        st.warning("من فضلك اكتب الأعراض.")
+        st.warning("الرجاء كتابة الأعراض أولاً.")
