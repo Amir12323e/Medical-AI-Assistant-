@@ -1,12 +1,10 @@
 import streamlit as st
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from gtts import gTTS
-import uuid
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="Medical AI Assistant", layout="centered")
 
-st.title("🩺 Medical AI Assistant Pro")
+st.title("🩺 Medical AI Assistant")
 st.warning("⚠️ هذا النظام يقدم معلومات عامة فقط وليس بديلاً عن الطبيب")
 
 # ---------------- MODEL ----------------
@@ -22,9 +20,9 @@ def load_model():
 tokenizer, model = load_model()
 
 # ---------------- INPUT ----------------
-symptoms = st.text_area("🧾 اكتب الأعراض هنا:")
+symptoms = st.text_area("🧾 اكتب الأعراض:", placeholder="مثال: صداع، حرارة، كحة")
 
-# ---------------- FUNCTION ----------------
+# ---------------- ANALYSIS ----------------
 def analyze(symptoms):
     prompt = f"""
 أنت مساعد طبي ذكي.
@@ -37,7 +35,7 @@ def analyze(symptoms):
 
 الأعراض: {symptoms}
 
-اكتب الإجابة باللغة العربية الفصحى فقط.
+اكتب الإجابة باللغة العربية الفصحى بشكل واضح ومنظم.
 """
 
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
@@ -56,31 +54,9 @@ def analyze(symptoms):
 if st.button("🔍 تحليل الأعراض"):
 
     if not symptoms.strip():
-        st.warning("من فضلك اكتب الأعراض")
+        st.warning("من فضلك اكتب الأعراض أولاً")
     else:
         result = analyze(symptoms)
 
         st.subheader("📋 النتيجة")
         st.write(result)
-
-        result = result.strip()
-
-        if len(result) > 5:
-
-            tts = gTTS(text=result, lang="ar")
-            audio_file = f"voice_{uuid.uuid4().hex}.mp3"
-            tts.save(audio_file)
-
-            st.audio(audio_file)
-
-        else:
-            st.warning("لا يوجد نص كافي لتحويله إلى صوت")
-        st.subheader("📋 النتيجة")
-        st.write(result)
-
-        # 🔊 صوت
-        tts = gTTS(text=result, lang="ar")
-        audio_file = f"voice_{uuid.uuid4().hex}.mp3"
-        tts.save(audio_file)
-
-        st.audio(audio_file)
